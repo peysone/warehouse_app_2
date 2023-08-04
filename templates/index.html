@@ -1,0 +1,47 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Warehouse Manager</title>
+</head>
+<body>
+    <h1>Stan konta: {{ account }}</h1>
+    <h1>Stan magazynu:</h1>
+    <ul>
+        {% for name, quantity in warehouse.items() %}
+            {% if name in prices %}
+                <li>{{ name }}: ilość - {{ quantity }}, cena - {{ prices[name] }} zł</li>
+            {% else %}
+                <li>{{ name }}: ilość - {{ quantity }}</li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+
+    <h2>Zakup</h2>
+    <form action="/zakup" method="post">
+        Nazwa produktu: <input type="text" name="name"><br>
+        Cena: <input type="text" name="price"><br>
+        Ilość: <input type="text" name="quantity"><br>
+        <input type="submit" value="Zakup">
+    </form>
+
+    <h2>Sprzedaż</h2>
+    <form action="/sprzedaz" method="post">
+    Nazwa produktu: <input type="text" name="name"><br>
+    Ilość sztuk: <input type="number" name="quantity"><br>
+    Cena: <input type="text" name="price"><br>
+    <input type="submit" value="Sprzedaj">
+    </form>
+
+    <h2>Zmiana salda</h2>
+    <form action="/saldo" method="post">
+        Wartość zmiany salda: <input type="text" name="amount"><br>
+        <input type="submit" value="Zmień saldo">
+    </form>
+
+    <h2>Historia operacji:</h2>
+    <form action="/historia" method="post">
+        <input type="submit" value="Przegląd">
+    </form>
+</body>
+</html>

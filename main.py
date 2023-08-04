@@ -40,9 +40,29 @@ Przy ich użyciu wywołuj poszczególne fragmenty aplikacji. Metody execute i as
 zgodnie z przykładami z materiałów do zajęć.
 
 Niedozwolone są żadne zmienne globalne, wszystkie dane powinny być przechowywane wewnątrz obiektu Manager.
+
+***
+Bazując na aplikacji do zarządzania firmą, stwórz jej webowy odpowiednik.
+Na stronie głównej wyświetl informację na temat stanu konta, magazynu oraz trzy formularze:
+zakup, sprzedaż, zmiana salda.
+Formularz zakupu powinien zawierać trzy pola: nazwa produktu, cena i ilość
+Formularz sprzedaży powinien zawierać dwa pola: nazwa produktu i ilość
+Formularz zmiany salda powinien zawierać jedno pole: wartość zmiany salda
+Dodatkowo utwórz drugą podstronę zawierającą historię wykonanych operacji.
+Podstrona powinna być dostępna pod URL "/historia/" oraz "/historia/<start>/<koniec>"
+W przypadku "/historia/" na stronie ma się pojawić cała dostępna historia.
+W przypadku "/historia/<start>/<koniec>" zależnie od podanych wartości w <start> i <koniec>,
+mają się pojawić wskazane linie, np. od 3 do 12. W przypadku podania złego (lub nieistniejącego zakresu indeksów), 
+program poinformuje o tym użytkownika i wyświetli możliwy do wybrania zakres historii.
+Zadanie wciąż powinno korzystać z plików do przechowywania stanu konta, magazynu i historii.
+
 """
 
 import json
+from flask import Flask, request, render_template, redirect, url_for
+
+
+app = Flask(__name__)
 
 class Manager:
     def __init__(self):
@@ -96,29 +116,32 @@ class Manager:
             else:
                 self.history.append(f"Warning: Ignoring change at ({column}, {row}). Coordinates out of range.")
 
-    def execute(self, command):
+    def execute(self, command, **kwargs):
         if command == "saldo":
-            amount = float(input("Wprowadź kwotę: "))
+            amount = kwargs.get('amount')
             if self.account + amount < 0:
                 action = "Nie można mieć ujemnego salda!"
                 self.history.append(action)
             else:
                 self.account += amount
-                action = f"Dodano {amount} do konta"
+                action = f"Zmieniono saldo o {amount}"
                 self.history.append(action)
                 self.save_account(self.account)
 
         elif command == "sprzedaż":
-            name = input("Wprowadź nazwę produktu: ")
+            name = kwargs.get('name')
+            quantity = kwargs.get('quantity')
+            price = kwargs.get('price')
+
             if name in self.warehouse:
-                price = self.prices[name]
-                quantity = int(input("Wprowadź liczbę sztuk: "))
                 if self.warehouse[name] >= quantity:
                     self.warehouse[name] -= quantity
                     total_price = price * quantity
                     self.account += total_price
                     action = f"Sprzedano {quantity} sztuk produktu '{name}' za {total_price} zł"
                     self.history.append(action)
+                    self.save_warehouse(self.warehouse)
+                    self.save_account(self.account)
                 else:
                     action = "Nie wystarczająca ilość produktu w magazynie"
                     self.history.append(action)
@@ -127,9 +150,9 @@ class Manager:
                 self.history.append(action)
 
         elif command == "zakup":
-            name = input("Wprowadź nazwę produktu: ")
-            price = float(input("Wprowadź cenę: "))
-            quantity = int(input("Wprowadź liczbę sztuk: "))
+            name = kwargs.get('name')
+            price = kwargs.get('price')
+            quantity = kwargs.get('quantity')
 
             if self.account >= price * quantity:
                 self.account -= price * quantity
@@ -141,10 +164,10 @@ class Manager:
                 action = f"Zakupiono {quantity} sztuk produktu '{name}' za {price * quantity} zł"
                 self.history.append(action)
                 self.save_warehouse(self.warehouse)
+                self.save_account(self.account)
             else:
                 action = "Brak wystarczających środków na koncie"
                 self.history.append(action)
-
         elif command == "konto":
             action = f"Stan konta: {self.account}"
             self.history.append(action)
@@ -187,11 +210,21 @@ class Manager:
         elif command == "koniec":
             pass
 
+            # Zapisz historię po wykonaniu każdej operacji
+        self.save_history(self.history)
+
     def assign(self):
         print("Witaj w programie zarządzania firmą!")
         while True:
             print("\nDostępne komendy:")
-            print("saldo\nsprzedaż\nzakup\nkonto\nlista\nmagazyn\nprzegląd\nkoniec")
+            print("saldo\n"
+                  "sprzedaż\n"
+                  "zakup\n"
+                  "konto\n"
+                  "lista\n"
+                  "magazyn\n"
+                  "przegląd\n"
+                  "koniec")
 
             command = input("Wprowadź komendę: ")
 
@@ -201,6 +234,55 @@ class Manager:
 
             self.execute(command)
 
-if __name__ == "__main__":
+manager = Manager()
+@app.route('/', methods=['GET'])
+def index():
     manager = Manager()
-    manager.assign()
+    account = manager.account
+    warehouse = manager.warehouse
+
+    return render_template('index.html', account=account, warehouse=warehouse, prices=manager.prices)
+
+@app.route('/zakup', methods=['POST'])
+def zakup():
+    global manager
+    name = request.form.get('name')
+    price = float(request.form.get('price'))
+    quantity = int(request.form.get('quantity'))
+    manager.execute("zakup", name=name, price=price, quantity=quantity)  # Przekazujemy odpowiednie argumenty
+    return redirect('/')
+
+
+@app.route('/sprzedaz', methods=['POST'])
+def sprzedaz():
+    name = request.form.get('name')
+    price = float(request.form.get('price'))
+    quantity = int(request.form.get('quantity'))
+    manager.execute("sprzedaż", name=name, price=price, quantity=quantity)
+    manager.execute("przegląd")  # Dodaj to wywołanie, aby zaktualizować historię
+    return index()
+
+
+@app.route('/saldo', methods=['POST'])
+def saldo():
+    global manager
+    if 'amount' not in request.form:
+        return "Brak podanej kwoty", 400
+
+    amount = float(request.form['amount'])
+    if amount is None or amount <= 0:
+        return "Niepoprawna kwota", 400
+
+    manager.execute("saldo", amount=amount)  # Dodaj to wywołanie, aby zaktualizować historię
+    return redirect('/')
+
+
+@app.route('/historia', methods=['GET', 'POST'])
+def historia():
+    global manager  # Dodajemy deklarację zmiennej globalnej manager
+    if request.method == 'POST':
+        manager.execute("przegląd")
+    return render_template('historia.html', historia=manager.history)
+
+if __name__ == "__main__":
+    app.run()
