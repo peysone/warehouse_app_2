@@ -210,7 +210,6 @@ class Manager:
         elif command == "koniec":
             pass
 
-            # Zapisz historię po wykonaniu każdej operacji
         self.save_history(self.history)
 
     def assign(self):
@@ -249,7 +248,7 @@ def zakup():
     name = request.form.get('name')
     price = float(request.form.get('price'))
     quantity = int(request.form.get('quantity'))
-    manager.execute("zakup", name=name, price=price, quantity=quantity)  # Przekazujemy odpowiednie argumenty
+    manager.execute("zakup", name=name, price=price, quantity=quantity)
     return redirect('/')
 
 
@@ -259,8 +258,12 @@ def sprzedaz():
     price = float(request.form.get('price'))
     quantity = int(request.form.get('quantity'))
     manager.execute("sprzedaż", name=name, price=price, quantity=quantity)
-    manager.execute("przegląd")  # Dodaj to wywołanie, aby zaktualizować historię
-    return index()
+
+    message = f"Sprzedano {quantity} sztuk produktu '{name}' za {price * quantity} zł"
+    manager.history.append(message)
+    manager.save_history(manager.history)
+
+    return redirect('/')
 
 
 @app.route('/saldo', methods=['POST'])
@@ -273,16 +276,15 @@ def saldo():
     if amount is None or amount <= 0:
         return "Niepoprawna kwota", 400
 
-    manager.execute("saldo", amount=amount)  # Dodaj to wywołanie, aby zaktualizować historię
+    manager.execute("saldo", amount=amount)
     return redirect('/')
 
 
-@app.route('/historia', methods=['GET', 'POST'])
+@app.route('/historia', methods=['GET'])
 def historia():
-    global manager  # Dodajemy deklarację zmiennej globalnej manager
-    if request.method == 'POST':
-        manager.execute("przegląd")
+    manager = Manager()
     return render_template('historia.html', historia=manager.history)
+
 
 if __name__ == "__main__":
     app.run()
